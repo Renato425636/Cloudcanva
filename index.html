@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Canvas - Simulador de Pipeline de Nuvem</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .service-icon {
+            transition: all 0.2s ease-in-out;
+            cursor: grab;
+        }
+        .service-icon:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+        .drop-zone {
+            transition: all 0.2s ease-in-out;
+            border: 2px dashed; /* Color is handled by Tailwind now */
+            aspect-ratio: 1 / 1;
+        }
+        .drop-zone.drag-over {
+            border-color: #4f46e5; /* indigo-600 */
+            background-color: #e0e7ff; /* indigo-100 */
+        }
+        .dark .drop-zone.drag-over {
+            border-color: #818cf8; /* indigo-400 */
+            background-color: #3730a3; /* indigo-800 */
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+        }
+        .arrow {
+            font-size: 2.5rem;
+            line-height: 1;
+            align-self: center;
+        }
+    </style>
+    <script>
+        // Handle dark mode toggling and initial load
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcons();
+        }
+        
+        function updateThemeIcons(){
+             const sunIcon = document.getElementById('sun-icon');
+             const moonIcon = document.getElementById('moon-icon');
+             if (document.documentElement.classList.contains('dark')) {
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+             } else {
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+             }
+        }
+
+        window.addEventListener('DOMContentLoaded', updateThemeIcons);
+    </script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+
+    <div class="flex h-screen antialiased">
+        <!-- Sidebar -->
+        <aside class="w-64 flex-shrink-0 bg-white dark:bg-slate-800 p-4 flex flex-col justify-between border-r border-slate-200 dark:border-slate-700">
+            <div>
+                <a href="#" onclick="goBack(event)" class="flex items-center space-x-3 px-2 mb-10 cursor-pointer">
+                    <!-- New Logo SVG -->
+                    <svg class="h-8 w-8 text-indigo-600 dark:text-indigo-400" width="24" height="24" viewBox="0 0 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19.333 9.14286C21.46 10.1143 23 12.1857 23 14.5714C23 17.8143 20.313 20.5 17.07 20.5H7.11C3.868 20.5 1.18 17.8143 1.18 14.5714C1.18 11.5286 3.558 9.04286 6.53 8.57143C7.11 5.32857 9.968 3 13.409 3C16.095 3 18.397 4.54286 19.333 6.85714V9.14286Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M7 15L10 12L13 15L16 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Cloud Canvas</h2>
+                </a>
+                <nav class="space-y-2">
+                    <a href="#" onclick="goBack(event)" class="sidebar-link flex items-center space-x-3 text-slate-600 dark:text-slate-300 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                        </svg>
+                        <span>Simulados</span>
+                    </a>
+                </nav>
+            </div>
+            <!-- Dark Mode Toggle -->
+             <div class="mt-4">
+                <button onclick="toggleTheme()" class="w-full flex items-center justify-center p-3 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                    <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                    <span class="ml-2">Alternar Tema</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+                <!-- TELA DE SELEÇÃO DE PLATAFORMA -->
+                <div id="platform-selection-screen" class="text-center">
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">Simulador de Pipeline de Nuvem</h1>
+                    <p class="text-slate-600 dark:text-slate-400 mb-8 max-w-2xl mx-auto">Passo 1: Escolha uma plataforma de nuvem para começar.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div onclick="selectPlatform('AWS')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-orange-500">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg" alt="AWS Logo" class="h-16 mx-auto mb-4 filter dark:brightness-0 dark:invert">
+                            <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">AWS</h2>
+                        </div>
+                        <div onclick="selectPlatform('Azure')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-blue-500">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg" alt="Azure Logo" class="h-16 mx-auto mb-4">
+                            <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Azure</h2>
+                        </div>
+                        <div onclick="selectPlatform('GCP')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-green-500">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Google_Cloud_logo_2020.svg/1280px-Google_Cloud_logo_2020.svg.png" alt="GCP Logo" class="h-16 mx-auto mb-4">
+                            <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">GCP</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TELA DE SELEÇÃO DE OBJETIVO -->
+                <div id="objective-selection-screen" class="hidden text-center">
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">Objetivo do Simulado</h1>
+                    <p class="text-slate-600 dark:text-slate-400 mb-8 max-w-2xl mx-auto">Passo 2: Qual área de conhecimento você quer praticar?</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div onclick="selectObjective('data-engineering')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-indigo-500">
+                            <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Engenharia de Dados</h2>
+                            <p class="text-slate-500 dark:text-slate-400 mt-2">ETL, Big Data e pipelines de streaming.</p>
+                        </div>
+                        <div onclick="selectObjective('data-analysis')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-indigo-500">
+                             <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Análise de Dados</h2>
+                             <p class="text-slate-500 dark:text-slate-400 mt-2">BI, Data Warehousing e consultas.</p>
+                        </div>
+                        <div onclick="selectObjective('cloud-operations')" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-indigo-500">
+                             <h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Operações & Automação</h2>
+                             <p class="text-slate-500 dark:text-slate-400 mt-2">APIs, microsserviços e automação de TI.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- TELA DE SELEÇÃO DE DIFICULDADE -->
+                <div id="difficulty-selection-screen" class="hidden text-center">
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">Nível do Desafio</h1>
+                    <p class="text-slate-600 dark:text-slate-400 mb-8 max-w-2xl mx-auto">Passo 3: Escolha a dificuldade do seu simulado.</p>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
+                        <div onclick="selectDifficulty(1)" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-green-500"><h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Nível 1</h2><p class="text-slate-500 dark:text-slate-400 mt-2">Fundamental</p></div>
+                        <div onclick="selectDifficulty(2)" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-yellow-500"><h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Nível 2</h2><p class="text-slate-500 dark:text-slate-400 mt-2">Intermediário</p></div>
+                        <div onclick="selectDifficulty(3)" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-orange-500"><h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Nível 3</h2><p class="text-slate-500 dark:text-slate-400 mt-2">Avançado</p></div>
+                        <div onclick="selectDifficulty(4)" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-red-500"><h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Nível 4</h2><p class="text-slate-500 dark:text-slate-400 mt-2">Especialista</p></div>
+                        <div onclick="selectDifficulty(5)" class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 text-center cursor-pointer transition-all duration-300 border-2 border-transparent shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-purple-500"><h2 class="text-2xl font-semibold text-slate-800 dark:text-white">Nível 5</h2><p class="text-slate-500 dark:text-slate-400 mt-2">Arquiteto</p></div>
+                    </div>
+                </div>
+
+
+                <!-- TELA DE SIMULAÇÃO PRINCIPAL -->
+                <div id="main-simulation-screen" class="hidden">
+                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                         <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Desafio: <span id="platform-name" class="font-extrabold text-indigo-600 dark:text-indigo-400"></span></h1>
+                         <div class="flex items-center space-x-4">
+                            <span id="quiz-progress" class="text-lg font-semibold bg-white dark:bg-slate-800 px-4 py-2 rounded-lg shadow-sm">Questão 1 de 2</span>
+                         </div>
+                    </div>
+                    
+                    <div id="scenario-container" class="bg-white dark:bg-slate-800 p-6 rounded-2xl mb-6 shadow-lg">
+                        <h2 class="text-xl font-semibold text-slate-800 dark:text-white mb-2">Situação Proposta:</h2>
+                        <p id="scenario-question" class="text-slate-600 dark:text-slate-300 leading-relaxed"></p>
+                    </div>
+
+                    <div id="challenge-ui" class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div class="lg:col-span-1 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg">
+                            <h3 class="text-lg font-semibold mb-4 border-b border-slate-200 dark:border-slate-700 pb-2 text-slate-800 dark:text-white">Caixa de Ferramentas</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Arraste os serviços para construir o pipeline.</p>
+                            <div id="services-palette" class="grid grid-cols-2 gap-4"></div>
+                        </div>
+
+                        <div class="lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg">
+                            <h3 class="text-lg font-semibold mb-4 border-b border-slate-200 dark:border-slate-700 pb-2 text-slate-800 dark:text-white">Construa seu Pipeline</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Organize os serviços na ordem correta.</p>
+                            <div class="w-full">
+                                <div id="pipeline-canvas" class="flex flex-nowrap items-center justify-evenly w-full gap-2 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[192px]"></div>
+                            </div>
+                            
+                            <div class="mt-6 flex justify-end space-x-4">
+                                <button onclick="resetPipeline()" class="bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Resetar</button>
+                                <button onclick="evaluateSolution()" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Avaliar Solução</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL DE FEEDBACK -->
+    <div id="feedback-modal" class="modal-overlay hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-8 max-w-4xl w-full transform transition-all" id="feedback-content">
+            <h2 id="feedback-title" class="text-3xl font-bold mb-4 text-center"></h2>
+            <div id="feedback-message" class="text-slate-600 dark:text-slate-300 mb-6"></div>
+            <button id="feedback-button" class="text-white font-bold py-3 px-8 rounded-lg transition-colors w-full">Tentar Novamente</button>
+        </div>
+    </div>
+    
+    <!-- MODAL DO PIX -->
+    <div id="pix-modal" class="modal-overlay hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center transform transition-all flex flex-col items-center">
+            <h2 class="text-3xl font-bold mb-4 text-slate-800 dark:text-white">Apoie o <span class="text-indigo-600 dark:text-indigo-400">Cloud Canvas</span>!</h2>
+            <div class="p-2 bg-white rounded-lg shadow-md my-4">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=dd7768e8-2646-4a4a-a038-03c3b01a1c7c" alt="PIX QR Code para doação" class="rounded-lg">
+            </div>
+            <p class="text-slate-600 dark:text-slate-400 mb-6">Sua jornada na nuvem está decolando! Se este simulador está te ajudando, que tal mandar um PIX para abastecer nosso café e mantermos a plataforma voando alto? Qualquer valor é um mega incentivo!</p>
+            <div class="flex justify-center space-x-4 w-full">
+                <button id="pix-secondary-button" class="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold py-3 px-6 rounded-lg transition-colors w-1/2">Fechar</button>
+                <button id="pix-primary-button" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg transition-colors w-1/2">Iniciar Simulado</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO DE SAÍDA -->
+    <div id="confirm-exit-modal" class="modal-overlay hidden">
+        <div class="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center transform transition-all">
+            <h2 class="text-2xl font-bold mb-4 text-slate-800 dark:text-white">Sair do Simulado?</h2>
+            <p class="text-slate-600 dark:text-slate-400 mb-8">Você tem certeza que deseja sair? Todo o seu progresso neste simulado será perdido.</p>
+            <div class="flex justify-center space-x-4 w-full">
+                <button onclick="document.getElementById('confirm-exit-modal').classList.add('hidden')" class="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold py-3 px-6 rounded-lg transition-colors w-1/2">Cancelar</button>
+                <button onclick="confirmExit()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors w-1/2">Sair</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RESUMO DO SIMULADO -->
+    <div id="quiz-summary-modal" class="modal-overlay hidden">
+        <div class="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-8 max-w-4xl w-full transform transition-all">
+            <h2 class="text-3xl font-bold mb-6 text-center text-slate-800 dark:text-white">Resumo do Simulado</h2>
+            <div id="summary-content" class="space-y-6 max-h-[60vh] overflow-y-auto pr-4">
+                <!-- O conteúdo do resumo será inserido aqui dinamicamente -->
+            </div>
+            <div class="flex justify-center mt-8">
+                 <button onclick="confirmExit()" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg transition-colors">Jogar Novamente</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DATA ---
+        const services = {
+            AWS: {
+                's3': { name: 'S3', icon: 'https://upload.wikimedia.org/wikipedia/commons/d/de/Amazon_S3_logo.svg' },
+                'lambda': { name: 'Lambda', icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Amazon_Lambda_architecture_logo.svg/1200px-Amazon_Lambda_architecture_logo.svg.png' },
+                'redshift': { name: 'Redshift', icon: 'https://a0.awsstatic.com/libra-css/images/services/redshift_icon_144px.png' },
+                'dynamodb': { name: 'DynamoDB', icon: 'https://a0.awsstatic.com/libra-css/images/services/dynamodb_icon_144px.png' },
+                'step-functions': { name: 'Step Functions', icon: 'https://a0.awsstatic.com/libra-css/images/services/step-functions_icon_144px.png' },
+                'sqs': { name: 'SQS', icon: 'https://a0.awsstatic.com/libra-css/images/services/sqs_icon_144px.png' },
+                'sns': { name: 'SNS', icon: 'https://a0.awsstatic.com/libra-css/images/services/sns_icon_144px.png' },
+                'rds': { name: 'RDS', icon: 'https://a0.awsstatic.com/libra-css/images/services/rds_icon_144px.png' },
+                'dms': { name: 'DMS', icon: 'https://a0.awsstatic.com/libra-css/images/services/dms_icon_144px.png' },
+                'kinesis': { name: 'Kinesis', icon: 'https://a0.awsstatic.com/libra-css/images/services/kinesis_icon_144px.png' },
+                'glue': { name: 'Glue', icon: 'https://a0.awsstatic.com/libra-css/images/services/glue_icon_144px.png' },
+                'athena': { name: 'Athena', icon: 'https://a0.awsstatic.com/libra-css/images/services/athena_icon_144px.png' },
+                'quicksight': { name: 'QuickSight', icon: 'https://a0.awsstatic.com/libra-css/images/services/quicksight_icon_144px.png' },
+                'eventbridge': { name: 'EventBridge', icon: 'https://a0.awsstatic.com/libra-css/images/services/eventbridge_icon_144px.png'},
+            },
+            Azure: { },
+            GCP: { }
+        };
+
+        const scenarios = {
+            AWS: [
+                 {
+                    "category": "cloud-operations",
+                    "difficulty": 5,
+                    "question": "Orquestre um fluxo de aprovação de documentos. O processo, gerenciado por Step Functions, começa com o upload no S3, passa por uma validação em paralelo (verificação de vírus e conformidade com Lambda) e termina com uma notificação SNS.",
+                    "solution": [
+                        "s3",
+                        {
+                            "orchestrator": "step-functions",
+                            "flow": [
+                                [["lambda"], ["lambda"]],
+                                "sns"
+                            ]
+                        }
+                    ],
+                    "availableServices": ["s3", "step-functions", "lambda", "sns", "sqs", "dynamodb"],
+                    "explanation": "O S3 atua como gatilho. O Step Functions é o orquestrador ideal para fluxos de trabalho com estados definidos. Dentro dele, as validações podem ocorrer em paralelo usando um estado 'Parallel'. Após a conclusão de ambos os ramos, o fluxo converge para uma única etapa final, que é a notificação via SNS."
+                },
+                {
+                    "category": "data-analysis",
+                    "difficulty": 5,
+                    "question": "Replique dados de um banco transacional. Em paralelo, crie um caminho para análise via Data Lake (S3 -> Athena) e outro para um Data Warehouse (Redshift -> QuickSight).",
+                    "solution": ["rds", "dms", [["s3", "athena"], ["redshift", "quicksight"]]],
+                    "availableServices": ["rds", "dms", "s3", "redshift", "athena", "quicksight", "glue", "lambda"],
+                    "explanation": "O DMS replica os dados do RDS. O pipeline então se divide em dois caminhos paralelos. O primeiro (Data Lake) armazena os dados no S3 para serem consultados pelo Athena. O segundo (Data Warehouse) carrega os dados no Redshift para serem visualizados com o QuickSight."
+                },
+                {
+                    "category": "cloud-operations",
+                    "difficulty": 5,
+                    "question": "Crie um pipeline de processamento de dados agendado. O processo é iniciado diariamente por um agenciador EventBridge, que aciona uma máquina de estados Step Functions. A máquina de estados, por sua vez, orquestra a execução de uma função Lambda para processar os dados e depositar o resultado final em um bucket S3.",
+                    "solution": ["eventbridge", {"orchestrator": "step-functions", "flow": ["lambda", "s3"]}],
+                    "availableServices": ["eventbridge", "step-functions", "lambda", "s3", "sqs", "dynamodb"],
+                    "explanation": "O EventBridge (agenciador) é ideal para iniciar fluxos de trabalho com base em agendamentos (schedules). Ele aciona o Step Functions (orquestrador), que gerencia a execução sequencial das tarefas. A função Lambda executa o processamento dos dados, e o S3 armazena o resultado final, completando o pipeline de ETL."
+                }
+            ],
+            Azure: [],
+            GCP: []
+        };
+
+
+        // --- STATE ---
+        let currentPlatform = null;
+        let currentObjective = null;
+        let selectedDifficulty = null;
+        let currentScenario = null;
+        let draggedServiceId = null;
+        
+        let currentQuiz = {
+            questions: [],
+            currentIndex: 0,
+            totalQuestions: 2,
+            results: []
+        };
+
+        // --- DOM ELEMENTS ---
+        const platformSelectionScreen = document.getElementById('platform-selection-screen');
+        const objectiveSelectionScreen = document.getElementById('objective-selection-screen');
+        const difficultySelectionScreen = document.getElementById('difficulty-selection-screen');
+        const mainSimulationScreen = document.getElementById('main-simulation-screen');
+        const platformName = document.getElementById('platform-name');
+        const scenarioQuestion = document.getElementById('scenario-question');
+        const servicesPalette = document.getElementById('services-palette');
+        const pipelineCanvas = document.getElementById('pipeline-canvas');
+        const feedbackModal = document.getElementById('feedback-modal');
+        const feedbackTitle = document.getElementById('feedback-title');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const feedbackButton = document.getElementById('feedback-button');
+        const pixModal = document.getElementById('pix-modal');
+        const confirmExitModal = document.getElementById('confirm-exit-modal');
+        const quizSummaryModal = document.getElementById('quiz-summary-modal');
+        const summaryContent = document.getElementById('summary-content');
+        const quizProgress = document.getElementById('quiz-progress');
+
+        function selectPlatform(platform) {
+            currentPlatform = platform;
+            platformSelectionScreen.classList.add('hidden');
+            objectiveSelectionScreen.classList.remove('hidden');
+        }
+
+        function selectObjective(objective) {
+            currentObjective = objective;
+            objectiveSelectionScreen.classList.add('hidden');
+            difficultySelectionScreen.classList.remove('hidden');
+        }
+
+        function selectDifficulty(level) {
+            selectedDifficulty = level;
+            if(generateQuiz()){
+                showPixModal('start');
+            }
+        }
+
+        function generateQuiz() {
+            currentQuiz.totalQuestions = 5; 
+            let availableScenarios = scenarios[currentPlatform].filter(s => s.category === currentObjective && s.difficulty === selectedDifficulty);
+            
+            availableScenarios.sort(() => 0.5 - Math.random());
+            currentQuiz.questions = availableScenarios.slice(0, 2); 
+            currentQuiz.totalQuestions = currentQuiz.questions.length;
+            currentQuiz.currentIndex = 0;
+            currentQuiz.results = [];
+
+            if (currentQuiz.questions.length === 0) {
+               alert(`Nenhuma questão encontrada para a plataforma, objetivo e nível selecionados. Por favor, tente outra combinação.`);
+               return false;
+            }
+            
+            return true;
+        }
+        
+        function showPixModal(context) {
+            const primaryBtn = document.getElementById('pix-primary-button');
+            const secondaryBtn = document.getElementById('pix-secondary-button');
+
+            if (context === 'start') {
+                primaryBtn.textContent = 'Iniciar Simulado';
+                primaryBtn.onclick = () => {
+                    pixModal.classList.add('hidden');
+                    difficultySelectionScreen.classList.add('hidden');
+                    mainSimulationScreen.classList.remove('hidden');
+                    platformName.textContent = currentPlatform;
+                    startChallenge(); 
+                };
+                secondaryBtn.textContent = 'Fechar';
+                 secondaryBtn.onclick = () => pixModal.classList.add('hidden');
+
+            } else if (context === 'end') {
+                primaryBtn.textContent = 'Jogar Novamente';
+                primaryBtn.onclick = () => {
+                    pixModal.classList.add('hidden');
+                    confirmExit(); 
+                };
+                secondaryBtn.textContent = 'Fechar';
+                 secondaryBtn.onclick = () => pixModal.classList.add('hidden');
+            }
+            pixModal.classList.remove('hidden');
+        }
+
+
+        function startChallenge() {
+            if (currentQuiz.questions.length === 0) return;
+
+            currentScenario = currentQuiz.questions[currentQuiz.currentIndex];
+            quizProgress.textContent = `Questão ${currentQuiz.currentIndex + 1} de ${currentQuiz.totalQuestions}`;
+            
+            scenarioQuestion.textContent = currentScenario.question;
+            populateServices();
+            createDropZones();
+        }
+
+        function nextQuestion() {
+            feedbackModal.classList.add('hidden');
+            currentQuiz.currentIndex++;
+            if (currentQuiz.currentIndex < currentQuiz.totalQuestions) {
+                startChallenge();
+            } else {
+                showQuizSummary();
+            }
+        }
+        
+        function goBack(event) {
+            if(event) event.preventDefault();
+            const isPlaying = currentPlatform !== null && !mainSimulationScreen.classList.contains('hidden');
+            if (isPlaying) {
+                confirmExitModal.classList.remove('hidden');
+            } else {
+                confirmExit();
+            }
+        }
+
+        function confirmExit() {
+            confirmExitModal.classList.add('hidden');
+            quizSummaryModal.classList.add('hidden');
+            mainSimulationScreen.classList.add('hidden');
+            difficultySelectionScreen.classList.add('hidden');
+            objectiveSelectionScreen.classList.add('hidden');
+            platformSelectionScreen.classList.remove('hidden');
+
+            currentPlatform = null;
+            currentObjective = null;
+            selectedDifficulty = null;
+            currentQuiz.results = [];
+            currentQuiz.totalQuestions = 5;
+        }
+        
+        function populateServices() {
+            servicesPalette.innerHTML = '';
+            const platformServices = services[currentPlatform];
+            
+            currentScenario.availableServices.forEach(serviceId => {
+                const service = platformServices[serviceId];
+                if (!service) return;
+                const serviceEl = document.createElement('div');
+                serviceEl.id = serviceId;
+                serviceEl.dataset.originalId = serviceId;
+                serviceEl.draggable = true;
+                serviceEl.className = 'service-icon flex flex-col items-center justify-center p-3 bg-slate-200 dark:bg-slate-700 rounded-lg shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600';
+                
+                const invertClass = service.invertInDark ? 'dark:brightness-0 dark:invert' : '';
+
+                const iconHtml = `
+                    <div class="h-1/2 flex items-center justify-center">
+                        <img src="${service.icon}" class="max-h-full max-w-full object-contain pointer-events-none filter ${invertClass}" alt="${service.name} icon" onerror="this.onerror=null;this.src='https://placehold.co/40x40/E2E8F0/475569?text=?';this.classList.remove('dark:invert');">
+                    </div>
+                `;
+
+                serviceEl.innerHTML = `
+                    ${iconHtml}
+                    <div class="font-semibold text-xs sm:text-sm mt-1 text-center text-slate-800 dark:text-slate-200 pointer-events-none">${service.name}</div>
+                `;
+                serviceEl.addEventListener('dragstart', handleDragStart);
+                servicesPalette.appendChild(serviceEl);
+            });
+        }
+        
+        function createDropZones() {
+            pipelineCanvas.innerHTML = '';
+            renderPipelineSegment(pipelineCanvas, currentScenario.solution);
+        }
+
+        function renderPipelineSegment(parentElement, solutionSegment) {
+            solutionSegment.forEach((step, index) => {
+                const stepContainer = document.createElement('div');
+                stepContainer.className = 'pipeline-step flex items-center justify-center flex-1 min-w-0 h-full';
+
+                if (typeof step === 'object' && !Array.isArray(step) && step.orchestrator) {
+                    stepContainer.classList.add('self-stretch');
+                    const orchestratorWrapper = document.createElement('div');
+                    orchestratorWrapper.className = 'orchestrator-container w-full h-full flex flex-col border-2 border-dashed border-indigo-400 dark:border-indigo-600 rounded-xl p-4 bg-indigo-50 dark:bg-indigo-900/30';
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center gap-2 mb-4 pb-4 border-b border-indigo-200 dark:border-indigo-800';
+                    
+                    const orchestratorDropZone = createSingleDropZone();
+                    orchestratorDropZone.classList.add('orchestrator-target');
+                    
+                    header.appendChild(orchestratorDropZone);
+                    
+                    const innerCanvas = document.createElement('div');
+                    innerCanvas.className = 'inner-canvas flex flex-nowrap items-center justify-start w-full flex-grow bg-white/50 dark:bg-slate-800/50 p-2 rounded-lg gap-2';
+                    
+                    orchestratorWrapper.appendChild(header);
+                    orchestratorWrapper.appendChild(innerCanvas);
+                    renderPipelineSegment(innerCanvas, step.flow);
+                    stepContainer.appendChild(orchestratorWrapper);
+                } else if (Array.isArray(step)) {
+                    stepContainer.classList.add('flex-col', 'gap-2', 'self-stretch', 'py-2', 'justify-center');
+                    step.forEach(branch => {
+                        const branchContainer = document.createElement('div');
+                        branchContainer.className = 'branch-container flex flex-nowrap items-center w-full gap-2';
+                        branch.forEach((serviceId, serviceIndex) => {
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'flex-1 min-w-0';
+                            const dropZone = createSingleDropZone();
+                            wrapper.appendChild(dropZone);
+                            branchContainer.appendChild(wrapper);
+
+                            if (serviceIndex < branch.length - 1) {
+                                branchContainer.appendChild(createArrow());
+                            }
+                        });
+                        stepContainer.appendChild(branchContainer);
+                    });
+                } else {
+                    const dropZone = createSingleDropZone();
+                    stepContainer.appendChild(dropZone);
+                }
+                
+                parentElement.appendChild(stepContainer);
+
+                if (index < solutionSegment.length - 1) {
+                    parentElement.appendChild(createArrow());
+                }
+            });
+        }
+
+        function createSingleDropZone() {
+            const dropZone = document.createElement('div');
+            dropZone.className = `drop-zone flex-shrink-0 flex items-center justify-center rounded-lg p-2 bg-white dark:bg-slate-800/50 border-slate-300 dark:border-slate-600 w-full max-w-[6rem] mx-auto`;
+            dropZone.addEventListener('dragover', handleDragOver);
+            dropZone.addEventListener('dragleave', handleDragLeave);
+            dropZone.addEventListener('drop', handleDrop);
+            return dropZone;
+        }
+
+        function createArrow() {
+            const arrow = document.createElement('div');
+            arrow.className = 'arrow mx-2 flex-shrink-0 text-slate-400 dark:text-slate-500';
+            arrow.innerHTML = '&#10140;';
+            return arrow;
+        }
+        
+        function handleDragStart(e) {
+            const serviceIcon = e.target.closest('.service-icon');
+            if (serviceIcon) {
+                draggedServiceId = serviceIcon.id;
+                 e.dataTransfer.setData('text/plain', serviceIcon.id);
+                 e.dataTransfer.effectAllowed = 'move';
+            }
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const dropZone = e.target.closest('.drop-zone');
+            if(dropZone) dropZone.classList.add('drag-over');
+        }
+        
+        function handleDragLeave(e) {
+            const dropZone = e.target.closest('.drop-zone');
+            if(dropZone) dropZone.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const dropZone = e.target.closest('.drop-zone');
+            if (!dropZone) return;
+            dropZone.classList.remove('drag-over');
+
+            const draggedElId = e.dataTransfer.getData('text/plain');
+            const draggedEl = document.getElementById(draggedElId);
+
+            if (!draggedEl) return;
+
+            const sourceContainer = draggedEl.parentElement;
+
+            if (sourceContainer.id === 'services-palette') {
+                if (dropZone.children.length > 0) return;
+                const originalId = draggedEl.dataset.originalId;
+                const clone = draggedEl.cloneNode(true);
+                clone.id = `clone-${originalId}-${Date.now()}`;
+                clone.dataset.originalId = originalId;
+                clone.className = 'service-icon relative flex flex-col items-center justify-center p-2 bg-slate-200 dark:bg-slate-700 rounded-lg shadow-sm w-full h-full';
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '&times;';
+                removeBtn.className = 'absolute top-1 right-1 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs hover:bg-red-700 transition-colors z-10';
+                removeBtn.onclick = (event) => event.target.parentElement.remove();
+                clone.appendChild(removeBtn);
+
+                clone.addEventListener('dragstart', handleDragStart);
+                dropZone.appendChild(clone);
+            } 
+            else if (sourceContainer.classList.contains('drop-zone')) {
+                if (dropZone.children.length > 0) {
+                    const existingEl = dropZone.children[0];
+                    sourceContainer.appendChild(existingEl);
+                    dropZone.appendChild(draggedEl);
+                } else {
+                    dropZone.appendChild(draggedEl);
+                }
+            }
+        }
+        
+        function resetPipeline() {
+            createDropZones();
+        }
+
+        function evaluateSolution() {
+            function parseCanvas(canvasElement) {
+                const solutionSegment = [];
+                const children = Array.from(canvasElement.children).filter(el => el.classList.contains('pipeline-step'));
+                
+                children.forEach(container => {
+                    const orchestratorWrapper = container.querySelector(':scope > .orchestrator-container');
+                    if (orchestratorWrapper) {
+                        const innerCanvas = orchestratorWrapper.querySelector('.inner-canvas');
+                        const orchestratorDropZone = orchestratorWrapper.querySelector('.orchestrator-target .service-icon');
+                        const orchestratorId = orchestratorDropZone ? orchestratorDropZone.dataset.originalId : null;
+                        solutionSegment.push({
+                            orchestrator: orchestratorId,
+                            flow: parseCanvas(innerCanvas)
+                        });
+                    } else if (container.querySelectorAll(':scope > .branch-container').length > 0) {
+                        const branches = [];
+                        container.querySelectorAll(':scope > .branch-container').forEach(branch => {
+                             const servicesInBranch = Array.from(branch.querySelectorAll('.drop-zone')).map(zone => {
+                                const serviceEl = zone.querySelector('.service-icon');
+                                return serviceEl ? serviceEl.dataset.originalId : null;
+                            });
+                            branches.push(servicesInBranch);
+                        });
+                        branches.sort((a,b) => a.join(',').localeCompare(b.join(',')));
+                        solutionSegment.push(branches);
+                    } else {
+                        const serviceEl = container.querySelector('.drop-zone .service-icon');
+                        solutionSegment.push(serviceEl ? serviceEl.dataset.originalId : null);
+                    }
+                });
+                return solutionSegment;
+            }
+
+            const userSolution = parseCanvas(pipelineCanvas);
+            const correctSolution = JSON.parse(JSON.stringify(currentScenario.solution));
+            
+            function sortSolution(solutionArray) {
+                if (!solutionArray) return;
+                solutionArray.forEach(step => {
+                    if (Array.isArray(step)) {
+                        step.sort((a, b) => a.join(',').localeCompare(b.join(',')));
+                    } else if (typeof step === 'object' && step.flow) {
+                        sortSolution(step.flow);
+                    }
+                });
+            }
+
+            sortSolution(correctSolution);
+            
+            const isCorrect = JSON.stringify(userSolution) === JSON.stringify(correctSolution);
+            
+            currentQuiz.results.push({
+                question: currentScenario.question,
+                solution: currentScenario.solution,
+                userSolution: userSolution,
+                isCorrect: isCorrect
+            });
+
+            showFeedback(isCorrect, userSolution, currentScenario.solution);
+        }
+
+       function createSolutionFlowHtml(solutionArray) {
+            const platformServices = services[currentPlatform];
+            const flowContainer = document.createElement('div');
+            flowContainer.className = 'flex flex-nowrap items-center justify-start w-full p-2 bg-slate-100 dark:bg-slate-900/50 rounded-lg overflow-x-auto gap-2';
+
+            function renderSegmentTo(parent, segment) {
+                segment.forEach((step, index) => {
+                    const stepContainer = document.createElement('div');
+                    stepContainer.className = 'flex items-center justify-center flex-1 min-w-max';
+
+                    if (typeof step === 'object' && !Array.isArray(step) && step.orchestrator) {
+                        stepContainer.className += ' flex flex-col border border-indigo-400 p-2 rounded-md bg-slate-50 dark:bg-slate-700/50 gap-1 mx-2 self-stretch';
+                        const header = document.createElement('div');
+                        header.className = 'flex items-center gap-2 font-semibold text-indigo-800 dark:text-indigo-200 text-sm';
+                        header.textContent = 'Orquestrado por:';
+                        header.appendChild(createServiceElement(step.orchestrator, true));
+                        stepContainer.appendChild(header);
+                        
+                        const innerFlowContainer = document.createElement('div');
+                        innerFlowContainer.className = 'flex flex-nowrap items-center justify-start w-full mt-2 border-t border-indigo-200 dark:border-indigo-800 pt-2 gap-2';
+                        stepContainer.appendChild(innerFlowContainer);
+                        
+                        renderSegmentTo(innerFlowContainer, step.flow);
+                    } else if (Array.isArray(step)) {
+                        stepContainer.className += ' flex flex-col gap-2 p-2 justify-center w-full';
+                        step.forEach(branch => {
+                            const branchContainer = document.createElement('div');
+                            branchContainer.className = 'flex flex-nowrap items-center w-full gap-2';
+                            branch.forEach((serviceId, serviceIndex) => {
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'flex-1 min-w-0';
+                                const serviceEl = createServiceElement(serviceId);
+                                wrapper.appendChild(serviceEl);
+                                branchContainer.appendChild(wrapper);
+
+                                if (serviceIndex < branch.length - 1) {
+                                    branchContainer.appendChild(createArrowElement());
+                                }
+                            });
+                            stepContainer.appendChild(branchContainer);
+                        });
+                    } else {
+                        stepContainer.className += ' flex items-center justify-center';
+                        stepContainer.appendChild(createServiceElement(step));
+                    }
+                    parent.appendChild(stepContainer);
+
+                    if (index < segment.length - 1) {
+                        parent.appendChild(createArrowElement());
+                    }
+                });
+            }
+            
+            function createServiceElement(serviceId, isSmall = false) {
+                const service = platformServices[serviceId];
+                const serviceEl = document.createElement('div');
+                const sizeClass = isSmall ? 'w-16 h-16 text-xs' : 'w-full max-w-[5rem] mx-auto text-xs';
+        
+                if(serviceId && service) {
+                    serviceEl.className = `flex flex-col items-center justify-center bg-white dark:bg-slate-700 p-1 rounded shadow-sm text-slate-800 dark:text-slate-200 aspect-square ${sizeClass}`;
+                    const invertClass = service.invertInDark ? 'dark:brightness-0 dark:invert' : '';
+                    serviceEl.innerHTML = `
+                        <img src="${service.icon}" class="h-1/2 object-contain filter ${invertClass}" alt="${service.name}" onerror="this.onerror=null;this.src='https://placehold.co/32x32/E2E8F0/475569?text=?';this.classList.remove('dark:invert');">
+                        <span class="text-center mt-1">${service.name}</span>
+                    `;
+                } else {
+                     serviceEl.className = `flex flex-col items-center justify-center bg-slate-200 dark:bg-slate-600 p-1 rounded shadow-sm aspect-square ${sizeClass}`;
+                     serviceEl.innerHTML = `<span class="font-bold">[Vazio]</span>`;
+                }
+                return serviceEl;
+            }
+        
+            function createArrowElement() {
+                 const arrow = document.createElement('div');
+                 arrow.className = 'arrow text-2xl mx-2 flex-shrink-0 text-slate-400 dark:text-slate-500';
+                 arrow.innerHTML = '&#10140;';
+                 return arrow;
+            }
+        
+            renderSegmentTo(flowContainer, solutionArray);
+            return flowContainer;
+        }
+
+
+        function showFeedback(isCorrect, userSolution, correctSolution) {
+            feedbackModal.classList.remove('hidden');
+            
+            const userSolutionHtml = createSolutionFlowHtml(userSolution).outerHTML;
+            const correctSolutionHtml = createSolutionFlowHtml(correctSolution).outerHTML;
+            const defaultExplanation = 'Esta sequência garante um fluxo de dados lógico e eficiente para o problema proposto, onde cada etapa prepara a informação para a seguinte.';
+            
+            const isLastQuestion = currentQuiz.currentIndex + 1 >= currentQuiz.totalQuestions;
+
+            if (isCorrect) {
+                feedbackTitle.textContent = "Parabéns!";
+                feedbackTitle.className = "text-3xl font-bold mb-4 text-center text-green-500";
+                
+                feedbackMessage.innerHTML = `
+                    <div class="text-left space-y-4">
+                        <p>Você construiu o pipeline corretamente!</p>
+                        <div>
+                            <p class="font-semibold text-slate-800 dark:text-white">Sua solução:</p>
+                            <div class="mt-1 bg-green-100 dark:bg-green-900/50 p-3 rounded-lg text-green-800 dark:text-green-300 text-sm">${correctSolutionHtml}</div>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-800 dark:text-white">Por que essa é a solução correta?</p>
+                            <p class="mt-1 text-slate-600 dark:text-slate-300 text-sm">${currentScenario.explanation || defaultExplanation}</p>
+                        </div>
+                    </div>`;
+
+                feedbackButton.textContent = isLastQuestion ? "Ver Resumo" : "Próximo Desafio";
+                feedbackButton.onclick = nextQuestion;
+                feedbackButton.className = "bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full mt-6";
+            } else {
+                feedbackTitle.textContent = "Análise da Solução";
+                feedbackTitle.className = "text-3xl font-bold mb-4 text-center text-orange-500";
+                
+                feedbackMessage.innerHTML = `
+                    <div class="text-left space-y-4">
+                         <p>Sua solução não está totalmente correta. A resposta certa foi apresentada para seu aprendizado.</p>
+                         <div>
+                            <p class="font-semibold text-slate-800 dark:text-white">Sua Resposta:</p>
+                            <div class="mt-1 bg-red-100 dark:bg-red-900/50 p-3 rounded-lg text-red-800 dark:text-red-300 text-sm">${userSolutionHtml}</div>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-800 dark:text-white">A Resposta Correta é:</p>
+                            <div class="mt-1 bg-green-100 dark:bg-green-900/50 p-3 rounded-lg text-green-800 dark:text-green-300 text-sm">${correctSolutionHtml}</div>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-800 dark:text-white">Por quê?</p>
+                            <p class="mt-1 text-slate-600 dark:text-slate-300 text-sm">${currentScenario.explanation || defaultExplanation}</p>
+                        </div>
+                    </div>`;
+                
+                feedbackButton.textContent = isLastQuestion ? "Ver Resumo" : "Próxima Questão";
+                feedbackButton.onclick = nextQuestion;
+                feedbackButton.className = "bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full mt-6";
+            }
+        }
+
+        function showQuizSummary() {
+            mainSimulationScreen.classList.add('hidden');
+            quizSummaryModal.classList.remove('hidden');
+            summaryContent.innerHTML = ''; 
+
+            currentQuiz.results.forEach((result, index) => {
+                const resultCard = document.createElement('div');
+                resultCard.className = 'p-4 border border-slate-200 dark:border-slate-700 rounded-lg';
+                
+                const questionTitle = document.createElement('h3');
+                questionTitle.className = 'font-semibold text-lg mb-2 text-slate-800 dark:text-white';
+                questionTitle.textContent = `Questão ${index + 1}: ${result.question}`;
+
+                const statusIcon = document.createElement('span');
+                statusIcon.className = `ml-2 font-bold ${result.isCorrect ? 'text-green-500' : 'text-red-500'}`;
+                statusIcon.textContent = result.isCorrect ? '✓ Correto' : '✗ Incorreto';
+                questionTitle.appendChild(statusIcon);
+                
+                const solutionTitle = document.createElement('p');
+                solutionTitle.className = 'font-semibold mt-4 mb-2 text-slate-800 dark:text-white';
+                solutionTitle.textContent = 'Fluxo correto da arquitetura:';
+
+                const solutionFlow = createSolutionFlowHtml(result.solution);
+
+                resultCard.appendChild(questionTitle);
+                resultCard.appendChild(solutionTitle);
+                resultCard.appendChild(solutionFlow);
+                summaryContent.appendChild(resultCard);
+            });
+        }
+
+    </script>
+
+</body>
+</html>
+
