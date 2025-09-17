@@ -6741,7 +6741,7 @@
             let availableScenarios = scenarios[currentPlatform].filter(s => s.category === currentObjective && s.difficulty === selectedDifficulty);
             
             availableScenarios.sort(() => 0.5 - Math.random());
-            currentQuiz.questions = availableScenarios.slice(0, 2); 
+            currentQuiz.questions = availableScenarios.slice(0, 5); 
             currentQuiz.totalQuestions = currentQuiz.questions.length;
             currentQuiz.currentIndex = 0;
             currentQuiz.results = [];
